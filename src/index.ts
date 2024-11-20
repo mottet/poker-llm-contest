@@ -17,7 +17,7 @@ async function main() {
   ];
 
   const game = new Game(players);
-  await game.start();
+  await game.playRound();
 }
 
 main();

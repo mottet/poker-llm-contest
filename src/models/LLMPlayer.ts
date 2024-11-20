@@ -1,7 +1,6 @@
 import { Player } from './Player';
 import { GameState } from './GameState';
-import { PlayerAction } from './PlayerAction';
-import { Card } from './Card';
+import { FullPlayerAction, PlayerAction } from './PlayerAction';
 import { OpenAIApi, Configuration } from 'openai';
 
 export class LLMPlayer extends Player {
@@ -13,10 +12,10 @@ export class LLMPlayer extends Player {
     this.openai = new OpenAIApi(configuration);
   }
 
-  async makeDecision(gameState: GameState): Promise<PlayerAction> {
+  async makeDecision(gameState: GameState): Promise<FullPlayerAction> {
     const prompt = this.generatePrompt(gameState);
     const response = await this.queryLLM(prompt);
-    return this.parseResponse(response);
+    return { playerId: this.id, playerName: this.name, ...this.parseResponse(response)};
   }
 
   private generatePrompt(gameState: GameState): string {

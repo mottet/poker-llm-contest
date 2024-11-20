@@ -1,99 +1,20 @@
 import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
-import { PlayerAction } from './models/PlayerAction';
-
-class LinkedListNode<T> {
-    constructor(
-        public value: T,
-        public prev: LinkedListNode<T> | null = null,
-        public next: LinkedListNode<T> | null = null
-    ) { }
-}
-
-class LinkedList<T> {
-    private currentNode: LinkedListNode<T> | null = null;
-    constructor(values: T[]) {
-        if (!values || values.length === 0) {
-            return;
-        }
-
-        this.currentNode = new LinkedListNode(values[0]);
-        let current = this.currentNode;
-        for (let i = 1; i < values.length; i++) {
-            const newNode = new LinkedListNode(values[i]);
-            newNode.prev = current;
-            current.next = newNode;
-            current = newNode;
-        }
-        // Make it circular
-        current.next = this.currentNode;
-        this.currentNode.prev = current;
-    }
-
-    public current = () => this.currentNode?.value;
-    public next = () => this.currentNode = this.currentNode?.next!;
-    public prev = () => this.currentNode = this.currentNode?.prev!;
-
-    public isEmpty = () => !this.currentNode;
-    public isUnique = () => !!this.currentNode && this.currentNode === this.currentNode?.next;
-    public isUniqueOrEmpty = () => this.currentNode === this.currentNode?.next;
-
-    public every(predicate: (value: T) => boolean) {
-        if (!this.currentNode) {
-            return false;
-        }
-        const startingPoint = this.currentNode;
-        let current = this.currentNode;
-        do {
-            if (!predicate(current.value)) {
-                return false;
-            }
-            current = current.next!;
-        } while (startingPoint != current);
-        return true;
-    }
-
-    public removeCurrentAndMoveNext() {
-        if (this.isEmpty()) {
-            return;
-        }
-        if (this.isUnique()) {
-            this.currentNode!.prev = null;
-            this.currentNode!.next = null;
-            this.currentNode = null;
-            return;
-        }
-
-        const nodeToRemove = this.currentNode!;
-        this.currentNode = nodeToRemove.next;
-        nodeToRemove.prev!.next = nodeToRemove.next;
-        nodeToRemove.next!.prev = nodeToRemove.prev;
-
-        // Clean up the removed node
-        nodeToRemove.next = null;
-        nodeToRemove.prev = null;
-    }
-}
+import { describePlayerAction, FullPlayerAction } from './models/PlayerAction';
+import { Card, Rank } from './models/Card';
 
 export class Game {
     private deck: Deck = new Deck();
-    private gameState: GameState = {
-        smallBlind: 5,
-        bigBlind: 10,
-        pot: 0,
-        currentBet: 0,
-        communityCards: [],
-    };
-
-    private activePlayers?: LinkedList<Player>;
-    private smallBlindIndex: number = 0;
+    private gameState = new GameState(5, 10);
 
     constructor(private players: Player[]) { }
 
-    async start() {
-        // Create circular doubly-linked list from players
-        this.activePlayers = new LinkedList<Player>(this.players);
+    async playRound() {
+        // Reset active status for players with chips
+        this.players.forEach(player => {
+            player.isActive = player.chips > 0;
+        });
 
         this.dealInitialCards();
         await this.bettingRound(true);
@@ -111,7 +32,12 @@ export class Game {
         await this.bettingRound();
 
         // Showdown
-        this.determineWinner();
+        const winner = this.determineWinner();
+        winner.chips += this.gameState.pot;
+        this.gameState.pot = 0;
+        this.gameState.currentBet = 0;
+        // Eliminate players with no chips left
+        this.eliminatePlayersAndMoveTheSmallBlindForward();
     }
 
     private dealInitialCards() {
@@ -129,71 +55,181 @@ export class Game {
     private async bettingRound(isFirstRound: boolean = false) {
         if (isFirstRound) {
             // Get small blind and big blind players
-            const smallBlindPlayer = this.players[this.smallBlindIndex];
-            const bigBlindPlayer = this.players[(this.smallBlindIndex + 1) % this.players.length];
+            const smallBlindPlayer = this.players[0];
+            const bigBlindPlayer = this.players[1];
 
             // Small blind pays half the minimum bet
-            smallBlindPlayer.chips -= this.gameState.smallBlind;
-            this.gameState.pot += this.gameState.smallBlind;
-            console.log(`${smallBlindPlayer.name} posts small blind of ${this.gameState.smallBlind}`);
+            const smallBlindAmount = Math.min(smallBlindPlayer.chips, this.gameState.smallBlind);
+            smallBlindPlayer.chips -= smallBlindAmount;
+            this.gameState.pot += smallBlindAmount;
+            this.gameState.currentBet = smallBlindAmount;
+            const smallBlindAction: FullPlayerAction = {
+                type: 'smallBlind',
+                playerId: smallBlindPlayer.id,
+                playerName: smallBlindPlayer.name,
+                amount: smallBlindAmount,
+            }
+            this.gameState.addLog(describePlayerAction(smallBlindAction));
+            this.gameState.actions.push(smallBlindAction);
 
             // Big blind pays full minimum bet
-            bigBlindPlayer.chips -= this.gameState.bigBlind;
-            this.gameState.pot += this.gameState.bigBlind;
-            this.gameState.currentBet = this.gameState.bigBlind;
-            console.log(`${bigBlindPlayer.name} posts big blind of ${this.gameState.bigBlind}`);
+            const bigBlindAmount = Math.min(bigBlindPlayer.chips, this.gameState.bigBlind);
+            bigBlindPlayer.chips -= bigBlindAmount;
+            this.gameState.pot += bigBlindAmount;
+            this.gameState.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
+            const bigBlindAction: FullPlayerAction = {
+                type: 'smallBlind',
+                playerId: bigBlindPlayer.id,
+                playerName: bigBlindPlayer.name,
+                amount: bigBlindAmount,
+            }
+            this.gameState.addLog(describePlayerAction(smallBlindAction));
+            this.gameState.actions.push(bigBlindAction);
 
-            // Increment small blind position for next hand
-            this.smallBlindIndex = (this.smallBlindIndex + 1) % this.players.length;
         }
-        while (!this.activePlayers!.isUnique() && !this.activePlayersHasEqualBets()) {
-            const action = await this.activePlayers!.current()!.makeDecision(this.gameState);
-            this.processAction(this.activePlayers!.current()!, action);
-            this.activePlayers?.next();
+
+        let currentPlayerIndex = isFirstRound ? 2 % this.players.length : 0;
+
+        while (!this.hasRoundEnded()) {
+            const currentPlayer = this.players[currentPlayerIndex];
+
+            if (currentPlayer.isActive) {
+                const action = await currentPlayer.makeDecision(this.gameState);
+                this.processAction(currentPlayer, action);
+            }
+
+            currentPlayerIndex = (currentPlayerIndex + 1) % this.players.length;
         }
     }
 
-    private processAction(player: Player, action: PlayerAction) {
-        console.log(`${player.name} decides to ${action.type}.`);
-
+    private processAction(player: Player, action: FullPlayerAction) {
         switch (action.type) {
             case 'fold':
-                this.activePlayers?.removeCurrentAndMoveNext();
+                player.isActive = false;
                 break;
             case 'call':
-                player.chips -= this.gameState.currentBet;
-                this.gameState.pot += this.gameState.currentBet;
+                const callAmount = Math.min(player.chips, this.gameState.currentBet);
+                player.chips -= callAmount;
+                this.gameState.pot += callAmount;
                 break;
             case 'raise':
-                const raiseAmount = action.amount || 0;
+                const raiseAmount = Math.min(player.chips, action.amount);
                 player.chips -= raiseAmount;
                 this.gameState.currentBet += raiseAmount;
                 this.gameState.pot += raiseAmount;
+                action.amount = raiseAmount;
                 break;
             case 'check':
-                // Player does nothing
                 break;
             case 'bet':
-                const betAmount = action.amount || 0;
+                const betAmount = Math.min(player.chips, action.amount);
                 player.chips -= betAmount;
-                this.gameState.currentBet = betAmount;
+                if (betAmount >= this.gameState.currentBet) {
+                    this.gameState.currentBet = betAmount;
+                }
                 this.gameState.pot += betAmount;
+                action.amount = betAmount;
                 break;
         }
-
-        // Update game state as needed
+        this.gameState.addLog(describePlayerAction(action));
+        this.gameState.actions.push(action);
     }
 
-    private activePlayersHasEqualBets(): boolean {
-        if (!this.activePlayers) {
-            return false;
+    private hasRoundEnded(): boolean {
+        const activePlayers = this.players.filter(p => p.isActive);
+        if (activePlayers.length <= 1) return true;
+
+        const firstBet = activePlayers[0].getLastBet();
+        return activePlayers.every(p => p.getLastBet() === firstBet);
+    }
+
+    private determineWinner(): Player {
+        const activePlayers = this.players.filter(p => p.isActive);
+        if (activePlayers.length === 0) throw Error("Should have at least one active player.");
+        if (activePlayers.length === 1) return activePlayers[0];
+
+        let winner = activePlayers[0];
+        let bestHand = winner.hand;
+        let bestHandRank = this.evaluateHand(bestHand, this.gameState.communityCards);
+
+        for (let i = 1; i < activePlayers.length; i++) {
+            const player = activePlayers[i];
+            const hand = player.hand;
+            const handRank = this.evaluateHand(hand, this.gameState.communityCards);
+
+            if (handRank > bestHandRank) {
+                winner = player;
+                bestHand = hand;
+                bestHandRank = handRank;
+            }
         }
-        const betOfCurrentPlayer = this.activePlayers.current()!.getLastBet();
-        return this.activePlayers.every(p => p.getLastBet() === betOfCurrentPlayer);
+
+        return winner;
     }
 
-    private determineWinner() {
-        // Implement hand evaluation logic to determine the winner
-        console.log('Determining the winner...');
+    private evaluateHand(playerHand: Card[], communityCards: Card[]): number {
+        const allCards = [...playerHand, ...communityCards];
+        const rankCount = this.getRankCount(allCards);
+        const isFlush = this.isFlush(allCards);
+        const isStraight = this.isStraight(rankCount);
+    
+        // Check for hand rankings
+        if (isStraight && isFlush && allCards.some(card => card.rank === Rank.Ace) && allCards.some(card => card.rank === Rank.King)) {
+            return 10; // Royal Flush
+        }
+        if (isStraight && isFlush) {
+            return 9; // Straight Flush
+        }
+        if (rankCount.some(count => count === 4)) {
+            return 8; // Four of a Kind
+        }
+        if (rankCount.some(count => count === 3) && rankCount.some(count => count === 2)) {
+            return 7; // Full House
+        }
+        if (isFlush) {
+            return 6; // Flush
+        }
+        if (isStraight) {
+            return 5; // Straight
+        }
+        if (rankCount.some(count => count === 3)) {
+            return 4; // Three of a Kind
+        }
+        if (rankCount.filter(count => count === 2).length === 2) {
+            return 3; // Two Pair
+        }
+        if (rankCount.some(count => count === 2)) {
+            return 2; // One Pair
+        }
+        return 1; // High Card
+    }
+    
+    private getRankCount(cards: Card[]): number[] {
+        const rankCount = Array(13).fill(0); // 13 ranks in poker
+        for (const card of cards) {
+            rankCount[Object.values(Rank).indexOf(card.rank)]++;
+        }
+        return rankCount;
+    }
+    
+    private isFlush(cards: Card[]): boolean {
+        const suitCount: Record<string, number> = {};
+        for (const card of cards) {
+            suitCount[card.suit] = (suitCount[card.suit] || 0) + 1;
+        }
+        return Object.values(suitCount).some(count => count >= 5);
+    }
+    
+    private isStraight(rankCount: number[]): boolean {
+        for (let i = 0; i < rankCount.length - 4; i++) {
+            if (rankCount[i] > 0 && rankCount[i + 1] > 0 && rankCount[i + 2] > 0 && rankCount[i + 3] > 0 && rankCount[i + 4] > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private eliminatePlayersAndMoveTheSmallBlindForward() {
+        this.players = [...this.players.slice(1), this.players[0]].filter(player => player.chips > 0);
     }
 }
