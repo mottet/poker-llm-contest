@@ -2,7 +2,8 @@ import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
 import { describePlayerAction, FullPlayerAction } from './models/PlayerAction';
-import { Card, Rank } from './models/Card';
+import { Card, Rank, Suit } from './models/Card';
+import { rankingHands } from './rankingHands';
 
 export class Game {
     private deck: Deck = new Deck();
@@ -32,10 +33,8 @@ export class Game {
         await this.bettingRound();
 
         // Showdown
-        const winner = this.determineWinner();
-        winner.chips += this.gameState.pot;
-        this.gameState.pot = 0;
-        this.gameState.currentBet = 0;
+        this.payWinner();
+
         // Eliminate players with no chips left
         this.eliminatePlayersAndMoveTheSmallBlindForward();
     }
@@ -143,90 +142,22 @@ export class Game {
         return activePlayers.every(p => p.getLastBet() === firstBet);
     }
 
-    private determineWinner(): Player {
+    private payWinner() {
         const activePlayers = this.players.filter(p => p.isActive);
         if (activePlayers.length === 0) throw Error("Should have at least one active player.");
-        if (activePlayers.length === 1) return activePlayers[0];
-
-        let winner = activePlayers[0];
-        let bestHand = winner.hand;
-        let bestHandRank = this.evaluateHand(bestHand, this.gameState.communityCards);
-
-        for (let i = 1; i < activePlayers.length; i++) {
-            const player = activePlayers[i];
-            const hand = player.hand;
-            const handRank = this.evaluateHand(hand, this.gameState.communityCards);
-
-            if (handRank > bestHandRank) {
-                winner = player;
-                bestHand = hand;
-                bestHandRank = handRank;
-            }
+        if (activePlayers.length === 1) {
+            activePlayers[0].chips += this.gameState.pot;
         }
-
-        return winner;
-    }
-
-    private evaluateHand(playerHand: Card[], communityCards: Card[]): number {
-        const allCards = [...playerHand, ...communityCards];
-        const rankCount = this.getRankCount(allCards);
-        const isFlush = this.isFlush(allCards);
-        const isStraight = this.isStraight(rankCount);
-    
-        // Check for hand rankings
-        if (isStraight && isFlush && allCards.some(card => card.rank === Rank.Ace) && allCards.some(card => card.rank === Rank.King)) {
-            return 10; // Royal Flush
+        else {
+            let bestHandRank = rankingHands(activePlayers, this.gameState.communityCards);
+            const winners = bestHandRank[0].players;
+            const potShare = this.gameState.pot / winners.length;
+            winners.forEach(winner => {
+                winner.chips += potShare;
+            });
         }
-        if (isStraight && isFlush) {
-            return 9; // Straight Flush
-        }
-        if (rankCount.some(count => count === 4)) {
-            return 8; // Four of a Kind
-        }
-        if (rankCount.some(count => count === 3) && rankCount.some(count => count === 2)) {
-            return 7; // Full House
-        }
-        if (isFlush) {
-            return 6; // Flush
-        }
-        if (isStraight) {
-            return 5; // Straight
-        }
-        if (rankCount.some(count => count === 3)) {
-            return 4; // Three of a Kind
-        }
-        if (rankCount.filter(count => count === 2).length === 2) {
-            return 3; // Two Pair
-        }
-        if (rankCount.some(count => count === 2)) {
-            return 2; // One Pair
-        }
-        return 1; // High Card
-    }
-    
-    private getRankCount(cards: Card[]): number[] {
-        const rankCount = Array(13).fill(0); // 13 ranks in poker
-        for (const card of cards) {
-            rankCount[Object.values(Rank).indexOf(card.rank)]++;
-        }
-        return rankCount;
-    }
-    
-    private isFlush(cards: Card[]): boolean {
-        const suitCount: Record<string, number> = {};
-        for (const card of cards) {
-            suitCount[card.suit] = (suitCount[card.suit] || 0) + 1;
-        }
-        return Object.values(suitCount).some(count => count >= 5);
-    }
-    
-    private isStraight(rankCount: number[]): boolean {
-        for (let i = 0; i < rankCount.length - 4; i++) {
-            if (rankCount[i] > 0 && rankCount[i + 1] > 0 && rankCount[i + 2] > 0 && rankCount[i + 3] > 0 && rankCount[i + 4] > 0) {
-                return true;
-            }
-        }
-        return false;
+        this.gameState.pot = 0;
+        this.gameState.currentBet = 0;
     }
 
     private eliminatePlayersAndMoveTheSmallBlindForward() {

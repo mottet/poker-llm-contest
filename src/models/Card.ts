@@ -21,8 +21,41 @@ export enum Rank {
     Ace = 'A',
 }
 
+export enum ValueRank {
+    Two,
+    Three,
+    Four,
+    Five,
+    Six,
+    Seven,
+    Eight,
+    Nine,
+    Ten,
+    Jack,
+    Queen,
+    King,
+    Ace,
+}
+
 export class Card {
-    constructor(public suit: Suit, public rank: Rank) { }
+    constructor(suit: Suit, rank: Rank) {
+        this._suit = suit;
+        this._rank = rank;
+        this._rankValue = Object.values(Rank).indexOf(rank)
+    }
+
+    private _suit: Suit;
+    get suit(): Suit {
+        return this._suit;
+    }
+    private _rank: Rank;
+    get rank(): Rank {
+        return this._rank;
+    }
+    private _rankValue: number;
+    get rankValue(): number {
+        return this._rankValue;
+    }
 
     toString() {
         return `${this.rank} of ${this.suit}`;
