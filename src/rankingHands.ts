@@ -125,7 +125,8 @@ function evaluateHand(playerHand: Card[], communityCards: Card[]): { handValue: 
 }
 
 function findRankWithCount(rankCount: number[], count: number, excludeRank: number | null = null): number | null {
-    for (const [rank, rankCountValue] of rankCount.entries()) {
+    for (let rank = rankCount.length - 1; rank >= 0; rank--) {
+        const rankCountValue = rankCount[rank];
         if (rankCountValue === count && rank !== excludeRank) {
             return rank;
         }
