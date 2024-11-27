@@ -4,20 +4,14 @@ import { FullPlayerAction } from './PlayerAction';
 
 export abstract class Player {
     public hand: Card[] = [];
-    private lastBet: number | null = null;
+    public lastBet: number = 0;
+    public totalRoundBet: number = 0;
     public isActive: boolean = true;
+    public isAllIn: boolean = false;
+    public hasActed: boolean = false;
 
     constructor(public id: number, public name: string, public chips: number) { }
 
     abstract makeDecision(gameState: GameState): Promise<FullPlayerAction>;
 
-    getLastBet(): number | null
-    {
-        return this.lastBet;    
-    }
-
-    resetLastBet()
-    {
-        this.lastBet = null;
-    }
 }
