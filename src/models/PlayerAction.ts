@@ -1,3 +1,7 @@
+
+export type BlindActionType = 'smallBlind' | 'bigBlind';
+export type PlayerActionType = 'raise' | 'bet' | 'fold' | 'call' | 'check';
+
 export type PlayerAction =
     | {
           type: 'smallBlind' | 'bigBlind' | 'raise' | 'bet';
@@ -20,8 +24,6 @@ export function describePlayerAction(playerAction: FullPlayerAction) {
             return `Player ${playerAction.playerName} posts small blind of ${playerAction.amount}`;
         case 'bigBlind':
             return `Player ${playerAction.playerName} posts big blind of ${playerAction.amount}`;
-        case 'fold':
-            return `Player ${playerAction.playerName} folds.`;
         case 'fold':
             return `Player ${playerAction.playerName} folds.`;
         case 'call':

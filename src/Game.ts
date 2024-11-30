@@ -1,14 +1,16 @@
 import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
-import { describePlayerAction, FullPlayerAction } from './models/PlayerAction';
+import { describePlayerAction, FullPlayerAction, PlayerActionType } from './models/PlayerAction';
 import { rankingHands } from './rankingHands';
 
 export class Game {
     private deck!: Deck;
-    private gameState = new GameState(5, 10);
+    private gameState: GameState;
 
-    constructor(private players: Player[]) { }
+    constructor(private players: Player[], smallBlind: number = 5, bigBlind: number = 10) {
+        this.gameState = new GameState(smallBlind, bigBlind);
+    }
 
     async playRound() {
         // Reset active status for players with chips
@@ -16,6 +18,8 @@ export class Game {
             player.isActive = player.chips > 0;
             player.lastBet = 0;
             player.totalRoundBet = 0;
+            player.hasActed = false;
+            player.isAllIn = false;
         });
 
         this.prepareDeck();
@@ -112,13 +116,29 @@ export class Game {
         // Determine the starting player
         let currentPlayerIndex = isFirstRound ? (2 % this.players.length) : 0;
 
-        let roundActive = true;
-
+        
+        // Reset players' hasActed status
+        this.players.forEach(player => {
+            if (player.isActive && !player.isAllIn) {
+                player.hasActed = false;
+            }
+        });
+        
+        let roundActive = this.shouldContinueBettingRound();
         while (roundActive) {
             const currentPlayer = this.players[currentPlayerIndex];
 
             if (currentPlayer.isActive && !currentPlayer.isAllIn && !currentPlayer.hasActed) {
-                const action = await currentPlayer.makeDecision(this.gameState);
+                const possibleActions = this.getPossibleActions(currentPlayer);
+                const action = await currentPlayer.makeDecision(this.gameState, possibleActions);
+
+                // Validate the action before processing
+                const isValid = this.validateAction(currentPlayer, action);
+                if (!isValid) {
+                    // If action is invalid, force a fold
+                    action.type = 'fold';
+                }
+
                 this.processAction(currentPlayer, action);
 
                 // If a raise or bet occurred, reset hasActed for other players
@@ -142,9 +162,54 @@ export class Game {
         // Reset lastBet and currentBet for next round
         this.players.forEach(player => {
             player.lastBet = 0;
+            player.totalRoundBet = 0;
             player.hasActed = false;
         });
         this.gameState.currentBet = 0;
+    }
+
+    private getPossibleActions(player: Player): PlayerActionType[] {
+        // Check if the action is valid based on the game state
+        const possibleActions: PlayerActionType[] = ['fold'];
+
+        if (this.gameState.currentBet === 0 || player.totalRoundBet === this.gameState.currentBet) {
+            possibleActions.push('check');
+        }
+        if (this.gameState.currentBet > player.totalRoundBet) {
+            possibleActions.push('call');
+        }
+        if (this.gameState.currentBet === 0) {
+            possibleActions.push('bet');
+        }
+        if (this.gameState.currentBet > 0) {
+            possibleActions.push('raise');
+        }
+
+        return possibleActions;
+    }
+
+    private validateAction(player: Player, action: FullPlayerAction): boolean {
+        // Check if the action is valid based on the game state
+        switch (action.type) {
+            case 'fold':
+                // Always allowed
+                return true;
+            case 'check':
+                // Allowed only if currentBet is zero or player's totalRoundBet equals currentBet
+                return this.gameState.currentBet === 0 || player.totalRoundBet === this.gameState.currentBet;
+            case 'call':
+                // Allowed only if currentBet is greater than player's totalRoundBet
+                return this.gameState.currentBet > player.totalRoundBet;
+            case 'bet':
+                // Allowed only if currentBet is zero
+                return this.gameState.currentBet === 0 && action.amount > 0 && action.amount <= player.chips;
+            case 'raise':
+                // Allowed only if currentBet is greater than zero and amount is valid
+                const minRaise = this.gameState.currentBet * 2 - player.totalRoundBet;
+                return this.gameState.currentBet > 0 && action.amount >= minRaise && action.amount <= player.chips;
+            default:
+                return false;
+        }
     }
 
     private processAction(player: Player, action: FullPlayerAction) {
@@ -193,10 +258,13 @@ export class Game {
 
     private shouldContinueBettingRound(): boolean {
         const activePlayers = this.players.filter(p => p.isActive && !p.isAllIn);
-
         // Betting round ends if:
         // - All active players have acted
         // - All bets are equal
+        // - Only one player is active and not allin
+        if (activePlayers.length === 1) {
+            return false;
+        }
         const allPlayersHaveActed = activePlayers.every(p => p.hasActed);
         const betsAreEqual = activePlayers.every(p => p.totalRoundBet === this.gameState.currentBet);
 
@@ -243,7 +311,6 @@ export class Game {
 
         while (sortedPlayers.length > 0) {
             const smallestBet = sortedPlayers[0].totalRoundBet;
-            const playersInPot = sortedPlayers.map(p => p);
 
             // Calculate the pot amount
             const potAmount = smallestBet * sortedPlayers.length;
@@ -251,16 +318,15 @@ export class Game {
             // Add the pot to the list
             pots.push({
                 amount: potAmount,
-                players: playersInPot,
+                players: [...sortedPlayers],
             });
-
+            
             // Subtract the smallest bet from each player's totalRoundBet
-            sortedPlayers.forEach(p => {
+            // and remove player if totalRoundBet is now zero
+            sortedPlayers = sortedPlayers.filter(p => {
                 p.totalRoundBet -= smallestBet;
+                return p.totalRoundBet > 0;
             });
-
-            // Remove players whose totalRoundBet is now zero
-            sortedPlayers = sortedPlayers.filter(p => p.totalRoundBet > 0);
         }
 
         return pots;

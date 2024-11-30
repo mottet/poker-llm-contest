@@ -1,6 +1,6 @@
 import { Card } from './Card';
 import { GameState } from './GameState';
-import { FullPlayerAction } from './PlayerAction';
+import { FullPlayerAction, PlayerActionType } from './PlayerAction';
 
 export abstract class Player {
     public hand: Card[] = [];
@@ -12,6 +12,6 @@ export abstract class Player {
 
     constructor(public id: number, public name: string, public chips: number) { }
 
-    abstract makeDecision(gameState: GameState): Promise<FullPlayerAction>;
+    abstract makeDecision(gameState: GameState, possibleActions: PlayerActionType[]): Promise<FullPlayerAction>;
 
 }

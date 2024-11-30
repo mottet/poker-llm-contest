@@ -1,39 +1,40 @@
 import { Player } from './Player';
 import { GameState } from './GameState';
-import { FullPlayerAction, PlayerAction } from './PlayerAction';
-import { OpenAIApi, Configuration } from 'openai';
+import { FullPlayerAction, PlayerAction, PlayerActionType } from './PlayerAction';
+// import { OpenAIApi, Configuration } from 'openai';
 
 export class LLMPlayer extends Player {
-  private openai: OpenAIApi;
+  // private openai: OpenAIApi;
 
   constructor(id: number, name: string, chips: number, apiKey: string) {
     super(id, name, chips);
-    const configuration = new Configuration({ apiKey });
-    this.openai = new OpenAIApi(configuration);
+    // const configuration = new Configuration({ apiKey });
+    // this.openai = new OpenAIApi(configuration);
   }
 
-  async makeDecision(gameState: GameState): Promise<FullPlayerAction> {
-    const prompt = this.generatePrompt(gameState);
+  async makeDecision(gameState: GameState, possibleActions: PlayerActionType[]): Promise<FullPlayerAction> {
+    const prompt = this.generatePrompt(gameState, possibleActions);
     const response = await this.queryLLM(prompt);
     return { playerId: this.id, playerName: this.name, ...this.parseResponse(response)};
   }
 
-  private generatePrompt(gameState: GameState): string {
+  private generatePrompt(gameState: GameState, possibleActions: PlayerActionType[]): string {
     const handDescription = this.hand.map(card => card.toString()).join(' and ');
     const communityCards = gameState.communityCards.length
       ? gameState.communityCards.map(card => card.toString()).join(', ')
       : 'not deal yet';
-    return `You are playing Texas Hold'em poker. Your hand is ${handDescription}. The community cards are ${communityCards}. The pot is ${gameState.pot} chips. It's your turn. Do you fold, call, raise, check, or bet?`;
+    return `You are playing Texas Hold'em poker. Your hand is ${handDescription}. The community cards are ${communityCards}. The pot is ${gameState.pot} chips. It's your turn. Do you ${possibleActions.join(", ")}?`;
   }
 
   private async queryLLM(prompt: string): Promise<string> {
-    const response = await this.openai.createCompletion({
-      model: 'text-davinci-003',
-      prompt,
-      max_tokens: 50,
-      temperature: 0.7,
-    });
-    return response.data.choices[0].text.trim();
+    // const response = await this.openai.createCompletion({
+    //   model: 'text-davinci-003',
+    //   prompt,
+    //   max_tokens: 50,
+    //   temperature: 0.7,
+    // });
+    // return response.data.choices[0].text.trim();
+    return "Not implemented yet.";
   }
 
   private parseResponse(response: string): PlayerAction {
@@ -51,7 +52,7 @@ export class LLMPlayer extends Player {
       const amount = this.extractAmount(response) || 10;
       return { type: 'bet', amount };
     } else {
-      return { type: 'call' };
+      return { type: 'fold' };
     }
   }
 
