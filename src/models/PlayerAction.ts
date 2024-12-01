@@ -1,6 +1,6 @@
 
 export type BlindActionType = 'smallBlind' | 'bigBlind';
-export type PlayerActionType = 'raise' | 'bet' | 'fold' | 'call' | 'check';
+export type PlayerActionType = 'raise' | 'bet' | 'fold' | 'call' | 'check' | 'allIn';
 
 export type PossibleAction =
     | {
@@ -8,7 +8,7 @@ export type PossibleAction =
           minimalAmount: number;
       }
     | {
-          type: 'fold' | 'call' | 'check';
+          type: 'fold' | 'call' | 'check' | 'allIn';
       };
 
 export type PlayerAction =
@@ -17,7 +17,7 @@ export type PlayerAction =
           amount: number;
       }
     | {
-          type: 'fold' | 'call' | 'check';
+          type: 'fold' | 'call' | 'check' | 'allIn';
       };
 
 export interface BasePlayerAction {
@@ -43,6 +43,8 @@ export function describePlayerAction(playerAction: FullPlayerAction) {
             return `Player ${playerAction.playerName} checks.`;
         case 'bet':
             return `Player ${playerAction.playerName} bets ${playerAction.amount}.`;
+        case 'allIn':
+            return `Player ${playerAction.playerName} goes all in.`;
     }
 }
 
@@ -53,10 +55,12 @@ export function describePossibleAction(possibleAction: PossibleAction) {
         case 'call':
             return `call`;
         case 'raise':
-            return `raise by at least ${possibleAction.minimalAmount}`;
+            return `raise ${possibleAction.minimalAmount} or more`;
         case 'check':
             return `check`;
         case 'bet':
-            return `bet at least ${possibleAction.minimalAmount}`;
+            return `bet ${possibleAction.minimalAmount} or more`;
+        case 'allIn':
+            return `all-in`;
     }
 }

@@ -1,8 +1,8 @@
 export enum Suit {
-    Hearts = 'Hearts',
-    Diamonds = 'Diamonds',
-    Clubs = 'Clubs',
-    Spades = 'Spades',
+    Hearts = '♡',
+    Diamonds = '♢',
+    Clubs = '♣',
+    Spades = '♠',
 }
 
 export enum Rank {
@@ -15,10 +15,10 @@ export enum Rank {
     Eight = '8',
     Nine = '9',
     Ten = '10',
-    Jack = 'J',
-    Queen = 'Q',
-    King = 'K',
-    Ace = 'A',
+    Jack = 'Jack',
+    Queen = 'Queen',
+    King = 'King',
+    Ace = 'Ace',
 }
 
 export enum ValueRank {
@@ -58,6 +58,6 @@ export class Card {
     }
 
     toString() {
-        return `${this.rank} of ${this.suit}`;
+        return `${this.rank}${this.suit}`;
     }
 }

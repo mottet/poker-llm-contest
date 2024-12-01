@@ -13,7 +13,7 @@ export abstract class Player {
   public isAllIn: boolean = false;
   public hasActed: boolean = false;
 
-  constructor(public id: number, public name: string, public chips: number) {}
+  constructor(public id: number, public name: string, public chips: number, public showHandInLog: boolean = false) {}
 
   abstract makeDecision(
     gameState: GameState,

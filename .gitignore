@@ -39,3 +39,4 @@ temp/
 
 # Debug
 .debug/
+*.log

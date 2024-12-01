@@ -19,7 +19,7 @@ type Hand = {
     kickersRank: number[]
 }
 
-type PlayerRank = { players: Player[], hand: Hand }
+export type PlayerRank = { players: Player[], hand: Hand }
 
 export function rankingHands(players: Player[], communityCards: Card[]): PlayerRank[] {
     // Step 1: Evaluate each player's hand
@@ -163,10 +163,10 @@ function getRankCount(cards: Card[]): number[] {
 
 function extractFlushHandIfAny(cards: Card[]): Card[] | undefined {
     const suitCount: Record<Suit, Card[]> = {
-        Clubs: [],
-        Diamonds: [],
-        Hearts: [],
-        Spades: [],
+        "♣": [],
+        "♢": [],
+        "♡": [],
+        "♠": [],
     };
     for (const card of cards) {
         suitCount[card.suit].push(card);

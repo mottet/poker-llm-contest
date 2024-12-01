@@ -8,9 +8,8 @@ import {
 } from "./PlayerAction";
 
 export abstract class LLMPlayer extends Player {
-
-  constructor(id: number, name: string, chips: number) {
-    super(id, name, chips);
+  constructor(id: number, name: string, chips: number, showHandInLog: boolean = true) {
+    super(id, name, chips, showHandInLog);
   }
 
   async makeDecision(
@@ -30,17 +29,16 @@ export abstract class LLMPlayer extends Player {
     gameState: GameState,
     possibleActions: PossibleAction[]
   ): string {
-    const handDescription = this.hand
-      .map((card) => card.toString())
-      .join(" and ");
-    const communityCards = gameState.communityCards.length
-      ? gameState.communityCards.map((card) => card.toString()).join(", ")
-      : "not deal yet";
-    return `You are playing Texas Hold'em poker. Your hand is ${handDescription}. The community cards are ${communityCards}. The pot is ${
+    const handDescription = this.hand.map((card) => card.toString()).join("|");
+    return `You are playing Texas Hold'em poker no limit with in playing order:\n${gameState.playersStack()}\nYou are ${
+      this.name
+    } in this game. Your hand is [${handDescription}]. The history are the round is:${
+      gameState.roundLog
+    }\nThe pot is ${
       gameState.pot
     } chips. It's your turn. Do you ${possibleActions
       .map(describePossibleAction)
-      .join(", ")}?`;
+      .join(", ")}? Reply exactly your action, no more.`;
   }
 
   abstract queryLLM(prompt: string): Promise<string>;
@@ -59,6 +57,8 @@ export abstract class LLMPlayer extends Player {
     } else if (action.includes("bet")) {
       const amount = this.extractAmount(response) || 10;
       return { type: "bet", amount };
+    } else if (action.includes("all") && action.includes("in")) {
+      return { type: "allIn" };
     } else {
       return { type: "fold" };
     }
@@ -67,5 +67,10 @@ export abstract class LLMPlayer extends Player {
   protected extractAmount(response: string): number | null {
     const match = response.match(/(\d+)/);
     return match ? parseInt(match[0], 10) : null;
+  }
+
+  protected async logToFile(logFile: string, message: string): Promise<void> {
+    const fs = require('fs').promises;
+    await fs.appendFile(logFile, message);
   }
 }

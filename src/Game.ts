@@ -2,18 +2,19 @@ import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
 import { describePlayerAction, FullPlayerAction, PossibleAction } from './models/PlayerAction';
-import { rankingHands } from './rankingHands';
+import { HandValue, rankingHands } from './rankingHands';
+import { Rank } from './models/Card';
 
 export class Game {
     private deck!: Deck;
     private gameState: GameState;
 
     constructor(private players: Player[], smallBlind: number = 5, bigBlind: number = 10) {
-        this.gameState = new GameState(smallBlind, bigBlind);
+        this.gameState = new GameState(players, smallBlind, bigBlind);
     }
 
     async playRound() {
-        // Reset active status for players with chips
+        this.gameState.reset()
         this.players.forEach(player => {
             player.isActive = player.chips > 0;
             player.totalHandRoundBet = 0;
@@ -21,30 +22,46 @@ export class Game {
             player.isAllIn = false;
         });
 
-        this.prepareDeck();
-
-        this.makeBlindsPay();
-
-        this.dealInitialCards();
-        await this.bettingRound(true);
-
-        // Flop
-        this.dealCommunityCards(3);
-        await this.bettingRound();
-
-        // Turn
-        this.dealCommunityCards(1);
-        await this.bettingRound();
-
-        // River
-        this.dealCommunityCards(1);
-        await this.bettingRound();
+        await this.bettingPhases();
 
         // Showdown
         this.payWinners();
 
         // Eliminate players with no chips left and move blinds
         this.eliminatePlayersAndMoveBlinds();
+
+        console.log(`\nPlayers stack:\n${this.gameState.playersStack()}`);
+    }
+
+    private async bettingPhases() {
+        this.prepareDeck();
+        this.makeBlindsPay();
+
+        // Pre-Flop
+        this.dealInitialCards();
+        await this.bettingRound(true);
+
+        if (this.players.filter(p => p.isActive).length < 2) {
+            return;
+        }
+
+        // Flop
+        this.dealCommunityCards(3);
+        await this.bettingRound();
+        if (this.players.filter(p => p.isActive).length < 2) {
+            return;
+        }
+    
+        // Turn
+        this.dealCommunityCards(1);
+        await this.bettingRound();
+        if (this.players.filter(p => p.isActive).length < 2) {
+            return;
+        }
+    
+        // River
+        this.dealCommunityCards(1);
+        await this.bettingRound();
     }
 
     private prepareDeck() {
@@ -104,6 +121,9 @@ export class Game {
     private dealInitialCards() {
         this.players.forEach(player => {
             player.hand = [this.deck.deal(), this.deck.deal()];
+            if (player.showHandInLog) {
+                console.log(`${player.name}: ${player.hand}`);
+            }
         });
     }
 
@@ -111,6 +131,7 @@ export class Game {
         for (let i = 0; i < count; i++) {
             this.gameState.communityCards.push(this.deck.deal());
         }
+        this.gameState.addLog(`\nCommunity card are now: ${ this.gameState.communityCards.join("|") }`);
     }
 
     private async bettingRound(isFirstRound: boolean = false) {
@@ -164,7 +185,7 @@ export class Game {
 
     private getPossibleActions(player: Player): PossibleAction[] {
         // Check if the action is valid based on the game state
-        const possibleActions: PossibleAction[] = [{ type: 'fold'}];
+        const possibleActions: PossibleAction[] = [{ type: 'fold' }, { type: 'allIn' }];
 
         if (this.gameState.currentBet === 0 || player.currentBet === this.gameState.currentBet) {
             possibleActions.push({ type: 'check' });
@@ -186,6 +207,7 @@ export class Game {
         // Check if the action is valid based on the game state
         switch (action.type) {
             case 'fold':
+            case 'allIn':
                 return true;
             case 'check':
                 return this.gameState.currentBet === 0 || player.currentBet === this.gameState.currentBet;
@@ -206,8 +228,9 @@ export class Game {
         const isValid = this.validateAction(player, action);
         if (!isValid) {
             // If action is invalid, force a fold
-            action.type = 'fold';
-            (action as any).amount = undefined;
+            (action as any) = { type: 'fold' };
+            this.gameState.addLog(describePlayerAction(action));
+            this.gameState.actions.push(action);
             return;
         }
 
@@ -215,16 +238,24 @@ export class Game {
             case 'fold':
                 player.isActive = false;
                 break;
+            case 'allIn':
+                const allInAmount = player.chips;
+                player.chips -= allInAmount;
+                player.currentBet += allInAmount;
+                player.totalHandRoundBet += allInAmount;
+                this.gameState.pot += allInAmount;
+                player.isAllIn = true;
+                break;
             case 'call':
                 const callAmount = Math.min(player.chips, this.gameState.currentBet - player.currentBet);
                 player.chips -= callAmount;
                 player.currentBet += callAmount;
                 player.totalHandRoundBet += callAmount;
                 this.gameState.pot += callAmount;
-                if (player.chips === 0) player.isAllIn = true;
                 break;
             case 'raise':
-                const totalRaise = this.gameState.currentBet + action.amount - player.currentBet;
+                const totalRaise = Math.min(player.chips, this.gameState.currentBet + action.amount - player.currentBet);
+                action.amount = totalRaise - this.gameState.currentBet + player.currentBet;
                 if (this.gameState.lastRaiseBy < action.amount) {
                     this.gameState.lastRaiseBy = action.amount;
                 }
@@ -233,7 +264,6 @@ export class Game {
                 player.totalHandRoundBet += totalRaise;
                 this.gameState.currentBet = player.currentBet;
                 this.gameState.pot += totalRaise;
-                if (player.chips === 0) player.isAllIn = true;
                 break;
             case 'check':
                 // No chips are bet when checking
@@ -247,8 +277,11 @@ export class Game {
                 this.gameState.currentBet = betAmount;
                 this.gameState.lastRaiseBy = betAmount;
                 this.gameState.pot += betAmount;
-                if (player.chips === 0) player.isAllIn = true;
                 break;
+        }
+        if (player.chips === 0) {
+            (action as any) = { type: 'allIn' };
+            player.isAllIn = true;
         }
         this.gameState.addLog(describePlayerAction(action));
         this.gameState.actions.push(action);
@@ -274,6 +307,7 @@ export class Game {
         if (activePlayers.length === 0) throw Error("Should have at least one active player.");
         if (activePlayers.length === 1) {
             activePlayers[0].chips += this.gameState.pot;
+            console.log(`Player ${activePlayers[0].name} wins the pot of ${this.gameState.pot}.`);
             this.gameState.pot = 0;
             return;
         }
@@ -283,8 +317,15 @@ export class Game {
 
         let bestHandRank = rankingHands(activePlayers, this.gameState.communityCards);
 
+        // Log the best hands of all active players
+        bestHandRank.forEach(rank => {
+            const playerNames = rank.players.map(p => p.name).join(", ");
+            const kicker = rank.hand.kickersRank.length > 0 ? ` with kickers: ${rank.hand.kickersRank.map(k => Object.values(Rank)[k]).join(", ")}`: null;
+            console.log(`Players ${playerNames} have a hand value of ${HandValue[rank.hand.handValue]}${kicker}`);
+        });
 
         // Distribute each side pot to the winner(s)
+        const paidPlayers: Record<string, number> = {};
         for (const pot of sidePots) {
             // Find the highest hand among players eligible for this pot
             const eligiblePlayers = bestHandRank.find(h => h.players.some(p => pot.players.includes(p)))!.players;
@@ -294,8 +335,10 @@ export class Game {
             const potShare = pot.amount / winners.length;
             winners.forEach(winner => {
                 winner.chips += potShare;
+                paidPlayers[winner.name] = (paidPlayers[winner.name] || 0) + potShare;
             });
         }
+        Object.keys(paidPlayers).forEach(p => console.log(`Player ${p} wins ${paidPlayers[p]} from the pot.`))
 
         this.gameState.pot = 0;
     }

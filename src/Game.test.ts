@@ -6,7 +6,7 @@ import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
 import { Card } from './models/Card';
 import { FullPlayerAction, PossibleAction } from './models/PlayerAction';
-import { rankingHands } from './rankingHands';
+import { HandValue, PlayerRank, rankingHands } from './rankingHands';
 
 jest.mock('./models/Deck');
 jest.mock('./rankingHands');
@@ -20,16 +20,28 @@ jest.mock('./rankingHands');
 });
 
 // Mock implementation for rankingHands
-(rankingHands as jest.Mock).mockImplementation((players: Player[], communityCards: Card[]) => {
+(rankingHands as jest.Mock).mockImplementation((players: Player[], communityCards: Card[]): PlayerRank[] => {
   return [
     {
       players: [players[1]],
+      hand: {
+        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
+        kickersRank: [12], // Replace with actual kicker ranks if needed
+      },
     },
     {
       players: [players[2]],
+      hand: {
+        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
+        kickersRank: [11], // Replace with actual kicker ranks if needed
+      },
     },
     {
       players: [players[0]],
+      hand: {
+        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
+        kickersRank: [10], // Replace with actual kicker ranks if needed
+      },
     },
   ];
 });
@@ -238,7 +250,7 @@ describe('Game class with all-in scenario', () => {
     game = new Game(players, 100, 200);
   });
 
-  it.only('should handle all-in situations correctly', async () => {
+  it('should handle all-in situations correctly', async () => {
     // Add decisions to simulate an all-in scenario
 
     // --- Pre-Flop Betting Round ---
