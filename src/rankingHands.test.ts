@@ -17,12 +17,6 @@ class PlayerTest extends Player {
   makeDecision(gameState: GameState): Promise<FullPlayerAction> {
     throw new Error("Method not implemented.");
   }
-  getLastBet(): number | null {
-    throw new Error("Method not implemented.");
-  }
-  resetLastBet(): void {
-    throw new Error("Method not implemented.");
-  }
 }
 
 describe("rankingHands", () => {

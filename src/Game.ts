@@ -1,7 +1,7 @@
 import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
-import { describePlayerAction, FullPlayerAction, PlayerActionType } from './models/PlayerAction';
+import { describePlayerAction, FullPlayerAction, PossibleAction } from './models/PlayerAction';
 import { rankingHands } from './rankingHands';
 
 export class Game {
@@ -16,8 +16,7 @@ export class Game {
         // Reset active status for players with chips
         this.players.forEach(player => {
             player.isActive = player.chips > 0;
-            player.lastBet = 0;
-            player.totalRoundBet = 0;
+            player.totalHandRoundBet = 0;
             player.hasActed = false;
             player.isAllIn = false;
         });
@@ -64,7 +63,8 @@ export class Game {
         // Small blind pays half the minimum bet
         const smallBlindAmount = Math.min(smallBlindPlayer.chips, this.gameState.smallBlind);
         smallBlindPlayer.chips -= smallBlindAmount;
-        smallBlindPlayer.totalRoundBet = smallBlindAmount;
+        smallBlindPlayer.totalHandRoundBet += smallBlindAmount;
+        smallBlindPlayer.currentBet = smallBlindAmount;
         this.gameState.pot += smallBlindAmount;
         this.gameState.currentBet = smallBlindAmount;
         const smallBlindAction: FullPlayerAction = {
@@ -79,7 +79,8 @@ export class Game {
         // Big blind pays full minimum bet
         const bigBlindAmount = Math.min(bigBlindPlayer.chips, this.gameState.bigBlind);
         bigBlindPlayer.chips -= bigBlindAmount;
-        bigBlindPlayer.totalRoundBet = bigBlindAmount;
+        bigBlindPlayer.totalHandRoundBet += bigBlindAmount;
+        bigBlindPlayer.currentBet = bigBlindAmount;
         this.gameState.pot += bigBlindAmount;
         this.gameState.currentBet = Math.max(smallBlindAmount, bigBlindAmount);
         const bigBlindAction: FullPlayerAction = {
@@ -123,7 +124,8 @@ export class Game {
                 player.hasActed = false;
             }
         });
-        
+        this.gameState.lastRaiseBy = this.gameState.bigBlind;
+
         let roundActive = this.shouldContinueBettingRound();
         while (roundActive) {
             const currentPlayer = this.players[currentPlayerIndex];
@@ -131,13 +133,6 @@ export class Game {
             if (currentPlayer.isActive && !currentPlayer.isAllIn && !currentPlayer.hasActed) {
                 const possibleActions = this.getPossibleActions(currentPlayer);
                 const action = await currentPlayer.makeDecision(this.gameState, possibleActions);
-
-                // Validate the action before processing
-                const isValid = this.validateAction(currentPlayer, action);
-                if (!isValid) {
-                    // If action is invalid, force a fold
-                    action.type = 'fold';
-                }
 
                 this.processAction(currentPlayer, action);
 
@@ -161,28 +156,27 @@ export class Game {
 
         // Reset lastBet and currentBet for next round
         this.players.forEach(player => {
-            player.lastBet = 0;
-            player.totalRoundBet = 0;
+            player.currentBet = 0;
             player.hasActed = false;
         });
         this.gameState.currentBet = 0;
     }
 
-    private getPossibleActions(player: Player): PlayerActionType[] {
+    private getPossibleActions(player: Player): PossibleAction[] {
         // Check if the action is valid based on the game state
-        const possibleActions: PlayerActionType[] = ['fold'];
+        const possibleActions: PossibleAction[] = [{ type: 'fold'}];
 
-        if (this.gameState.currentBet === 0 || player.totalRoundBet === this.gameState.currentBet) {
-            possibleActions.push('check');
+        if (this.gameState.currentBet === 0 || player.currentBet === this.gameState.currentBet) {
+            possibleActions.push({ type: 'check' });
         }
-        if (this.gameState.currentBet > player.totalRoundBet) {
-            possibleActions.push('call');
+        if (this.gameState.currentBet > player.currentBet) {
+            possibleActions.push({ type: 'call' });
         }
         if (this.gameState.currentBet === 0) {
-            possibleActions.push('bet');
+            possibleActions.push({ type: 'bet', minimalAmount: Math.min(player.chips, this.gameState.lastRaiseBy) });
         }
-        if (this.gameState.currentBet > 0) {
-            possibleActions.push('raise');
+        if (this.gameState.currentBet > 0 && player.chips + player.currentBet - this.gameState.currentBet > 0) {
+            possibleActions.push({ type: 'raise', minimalAmount: Math.min(player.chips + player.currentBet - this.gameState.currentBet, this.gameState.lastRaiseBy) });
         }
 
         return possibleActions;
@@ -192,20 +186,15 @@ export class Game {
         // Check if the action is valid based on the game state
         switch (action.type) {
             case 'fold':
-                // Always allowed
                 return true;
             case 'check':
-                // Allowed only if currentBet is zero or player's totalRoundBet equals currentBet
-                return this.gameState.currentBet === 0 || player.totalRoundBet === this.gameState.currentBet;
+                return this.gameState.currentBet === 0 || player.currentBet === this.gameState.currentBet;
             case 'call':
-                // Allowed only if currentBet is greater than player's totalRoundBet
-                return this.gameState.currentBet > player.totalRoundBet;
+                return this.gameState.currentBet > player.currentBet;
             case 'bet':
-                // Allowed only if currentBet is zero
                 return this.gameState.currentBet === 0 && action.amount > 0 && action.amount <= player.chips;
             case 'raise':
-                // Allowed only if currentBet is greater than zero and amount is valid
-                const minRaise = this.gameState.currentBet * 2 - player.totalRoundBet;
+                const minRaise = Math.min(player.chips + player.currentBet - this.gameState.currentBet, this.gameState.lastRaiseBy);
                 return this.gameState.currentBet > 0 && action.amount >= minRaise && action.amount <= player.chips;
             default:
                 return false;
@@ -213,27 +202,37 @@ export class Game {
     }
 
     private processAction(player: Player, action: FullPlayerAction) {
+        // Validate the action before processing
+        const isValid = this.validateAction(player, action);
+        if (!isValid) {
+            // If action is invalid, force a fold
+            action.type = 'fold';
+            (action as any).amount = undefined;
+            return;
+        }
+
         switch (action.type) {
             case 'fold':
                 player.isActive = false;
                 break;
             case 'call':
-                const callAmount = Math.min(player.chips, this.gameState.currentBet - player.totalRoundBet);
+                const callAmount = Math.min(player.chips, this.gameState.currentBet - player.currentBet);
                 player.chips -= callAmount;
-                player.lastBet += callAmount;
-                player.totalRoundBet += callAmount;
+                player.currentBet += callAmount;
+                player.totalHandRoundBet += callAmount;
                 this.gameState.pot += callAmount;
                 if (player.chips === 0) player.isAllIn = true;
                 break;
             case 'raise':
-                const totalRaise = (this.gameState.currentBet - player.totalRoundBet) + action.amount;
-                const actualRaiseAmount = Math.min(player.chips, totalRaise);
-                action.amount = actualRaiseAmount;
-                player.chips -= actualRaiseAmount;
-                player.lastBet += actualRaiseAmount;
-                player.totalRoundBet += actualRaiseAmount;
-                this.gameState.currentBet = player.totalRoundBet;
-                this.gameState.pot += actualRaiseAmount;
+                const totalRaise = this.gameState.currentBet + action.amount - player.currentBet;
+                if (this.gameState.lastRaiseBy < action.amount) {
+                    this.gameState.lastRaiseBy = action.amount;
+                }
+                player.chips -= totalRaise;
+                player.currentBet += totalRaise;
+                player.totalHandRoundBet += totalRaise;
+                this.gameState.currentBet = player.currentBet;
+                this.gameState.pot += totalRaise;
                 if (player.chips === 0) player.isAllIn = true;
                 break;
             case 'check':
@@ -243,11 +242,10 @@ export class Game {
                 const betAmount = Math.min(player.chips, action.amount);
                 action.amount = betAmount;
                 player.chips -= betAmount;
-                player.lastBet += betAmount;
-                player.totalRoundBet += betAmount;
-                if (betAmount >= this.gameState.currentBet) {
-                    this.gameState.currentBet = betAmount;
-                }
+                player.currentBet = betAmount;
+                player.totalHandRoundBet += betAmount;
+                this.gameState.currentBet = betAmount;
+                this.gameState.lastRaiseBy = betAmount;
                 this.gameState.pot += betAmount;
                 if (player.chips === 0) player.isAllIn = true;
                 break;
@@ -266,7 +264,7 @@ export class Game {
             return false;
         }
         const allPlayersHaveActed = activePlayers.every(p => p.hasActed);
-        const betsAreEqual = activePlayers.every(p => p.totalRoundBet === this.gameState.currentBet);
+        const betsAreEqual = activePlayers.every(p => p.currentBet === this.gameState.currentBet);
 
         return !(allPlayersHaveActed && betsAreEqual);
     }
@@ -304,13 +302,13 @@ export class Game {
 
     private createSidePots() {
         const pots = [];
-        const playersWithBets = this.players.filter(p => p.totalRoundBet > 0);
+        const playersWithBets = this.players.filter(p => p.totalHandRoundBet > 0);
 
         // Sort players by total bet amount
-        let sortedPlayers = playersWithBets.sort((a, b) => a.totalRoundBet - b.totalRoundBet);
+        let sortedPlayers = playersWithBets.sort((a, b) => a.totalHandRoundBet - b.totalHandRoundBet);
 
         while (sortedPlayers.length > 0) {
-            const smallestBet = sortedPlayers[0].totalRoundBet;
+            const smallestBet = sortedPlayers[0].totalHandRoundBet;
 
             // Calculate the pot amount
             const potAmount = smallestBet * sortedPlayers.length;
@@ -324,8 +322,8 @@ export class Game {
             // Subtract the smallest bet from each player's totalRoundBet
             // and remove player if totalRoundBet is now zero
             sortedPlayers = sortedPlayers.filter(p => {
-                p.totalRoundBet -= smallestBet;
-                return p.totalRoundBet > 0;
+                p.totalHandRoundBet -= smallestBet;
+                return p.totalHandRoundBet > 0;
             });
         }
 

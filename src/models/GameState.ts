@@ -7,6 +7,7 @@ export class GameState {
         public bigBlind: number,
         public pot: number = 0,
         public currentBet: number = 0,
+        public lastRaiseBy: number = 0,
         public communityCards: Card[] = [],
         public actions: PlayerAction[] = [],
         public actionLog: string = "",

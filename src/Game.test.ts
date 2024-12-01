@@ -5,7 +5,7 @@ import { Player } from './models/Player';
 import { Deck } from './models/Deck';
 import { GameState } from './models/GameState';
 import { Card } from './models/Card';
-import { FullPlayerAction, PlayerActionType } from './models/PlayerAction';
+import { FullPlayerAction, PossibleAction } from './models/PlayerAction';
 import { rankingHands } from './rankingHands';
 
 jest.mock('./models/Deck');
@@ -47,7 +47,7 @@ class MockPlayer extends Player {
     this.decisions.push(action);
   }
 
-  async makeDecision(gameState: GameState, possibleActions: PlayerActionType[]): Promise<FullPlayerAction> {
+  async makeDecision(gameState: GameState, possibleActions: PossibleAction[]): Promise<FullPlayerAction> {
     if (this.decisionIndex >= this.decisions.length) {
       // Default to 'fold' if no more decisions
       return {
@@ -89,9 +89,9 @@ describe('Game class', () => {
     (game as any).makeBlindsPay();
 
     expect(players[0].chips).toBe(995); // Alice pays small blind
-    expect(players[0].totalRoundBet).toBe(5);
+    expect(players[0].totalHandRoundBet).toBe(5);
     expect(players[1].chips).toBe(990); // Bob pays big blind
-    expect(players[1].totalRoundBet).toBe(10);
+    expect(players[1].totalHandRoundBet).toBe(10);
     expect(game['gameState'].pot).toBe(15);
     expect(game['gameState'].currentBet).toBe(10);
   });
@@ -111,10 +111,10 @@ describe('Game class', () => {
 
   it('should create side pots correctly', () => {
     // Set up players with different bets
-    players[0].totalRoundBet = 100;
-    players[1].totalRoundBet = 200;
-    players[2].totalRoundBet = 300;
-    players[3].totalRoundBet = 400;
+    players[0].totalHandRoundBet = 100;
+    players[1].totalHandRoundBet = 200;
+    players[2].totalHandRoundBet = 300;
+    players[3].totalHandRoundBet = 400;
 
     const sidePots = (game as any).createSidePots();
 
@@ -238,7 +238,7 @@ describe('Game class with all-in scenario', () => {
     game = new Game(players, 100, 200);
   });
 
-  it('should handle all-in situations correctly', async () => {
+  it.only('should handle all-in situations correctly', async () => {
     // Add decisions to simulate an all-in scenario
 
     // --- Pre-Flop Betting Round ---
@@ -246,19 +246,19 @@ describe('Game class with all-in scenario', () => {
     // Action starts with Charlie
 
     // Pre-Flop actions
-    players[2].addDecision({ type: 'call', playerId: 3, playerName: 'Charlie' }); // Charlie calls with 200 (all-in)
-    players[3].addDecision({ type: 'raise', playerId: 4, playerName: 'Diana', amount: 200 }); // Diana raises
-    players[0].addDecision({ type: 'call', playerId: 1, playerName: 'Alice' }); // Alice calls
-    players[1].addDecision({ type: 'call', playerId: 2, playerName: 'Bob' }); // Bob calls
+    players[2].addDecision({ type: 'call', playerId: 3, playerName: 'Charlie' }); // all-in with 200
+    players[3].addDecision({ type: 'raise', playerId: 4, playerName: 'Diana', amount: 200 }); 
+    players[0].addDecision({ type: 'call', playerId: 1, playerName: 'Alice' });
+    players[1].addDecision({ type: 'call', playerId: 2, playerName: 'Bob' });
 
     // Since Charlie is all-in, he cannot act further
 
     // --- Flop Betting Round ---
     // Players: Alice, Bob, Diana
-    players[0].addDecision({ type: 'check', playerId: 1, playerName: 'Alice' }); // Alice checks
-    players[1].addDecision({ type: 'bet', playerId: 2, playerName: 'Bob', amount: 500 }); // Bob bets (all-in)
-    players[3].addDecision({ type: 'call', playerId: 4, playerName: 'Diana' }); // Diana calls
-    players[0].addDecision({ type: 'fold', playerId: 1, playerName: 'Alice' }); // Alice folds
+    players[0].addDecision({ type: 'check', playerId: 1, playerName: 'Alice' });
+    players[1].addDecision({ type: 'bet', playerId: 2, playerName: 'Bob', amount: 500 }); // all-in
+    players[3].addDecision({ type: 'call', playerId: 4, playerName: 'Diana' }); // Diana calls all-in
+    players[0].addDecision({ type: 'fold', playerId: 1, playerName: 'Alice' });
 
     // --- Turn and River Betting Rounds ---
     // No further actions as Bob is all-in
@@ -274,7 +274,7 @@ describe('Game class with all-in scenario', () => {
     // Side Pot 3: Bob's remaining all-in (100) x 1 players = 100
     // Total pot: 800 + 600 + 800 + 100 = 2300
 
-    // hand order
+    // Hand order
     // Charlie
     // Diane
     // Bob
