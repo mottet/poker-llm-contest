@@ -19,33 +19,6 @@ jest.mock('./rankingHands');
   };
 });
 
-// Mock implementation for rankingHands
-(rankingHands as jest.Mock).mockImplementation((players: Player[], communityCards: Card[]): PlayerRank[] => {
-  return [
-    {
-      players: [players[1]],
-      hand: {
-        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
-        kickersRank: [12], // Replace with actual kicker ranks if needed
-      },
-    },
-    {
-      players: [players[2]],
-      hand: {
-        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
-        kickersRank: [11], // Replace with actual kicker ranks if needed
-      },
-    },
-    {
-      players: [players[0]],
-      hand: {
-        handValue: HandValue.HighCard, // Replace with actual evaluation logic if needed
-        kickersRank: [10], // Replace with actual kicker ranks if needed
-      },
-    },
-  ];
-});
-
 // MockPlayer class to control player decisions
 class MockPlayer extends Player {
   private decisions: FullPlayerAction[] = [];
@@ -107,19 +80,6 @@ describe('Game class', () => {
     expect(game['gameState'].pot).toBe(15);
     expect(game['gameState'].currentBet).toBe(10);
   });
-
-  // it('should process a betting round correctly', async () => {
-  //   game['gameState'].currentBet = 10;
-  //   await (game as any).bettingRound(true);
-
-  //   // Check that all players have acted
-  //   players.forEach((player) => {
-  //     expect(player.hasActed).toBe(true);
-  //   });
-
-  //   // Check that the pot has increased accordingly
-  //   expect(game['gameState'].pot).toBeGreaterThan(15);
-  // });
 
   it('should create side pots correctly', () => {
     // Set up players with different bets
@@ -236,21 +196,32 @@ describe('Game class', () => {
 });
 
 describe('Game class with all-in scenario', () => {
-  let players: MockPlayer[];
-  let game: Game;
-
-  beforeEach(() => {
-    // Initialize players
-    players = [
-      new MockPlayer(1, 'Alice', 500),
-      new MockPlayer(2, 'Bob', 1000),
-      new MockPlayer(3, 'Charlie', 200),
-      new MockPlayer(4, 'Diana', 800),
-    ];
-    game = new Game(players, 100, 200);
-  });
-
   it('should handle all-in situations correctly', async () => {
+    const players = [
+      new MockPlayer(0, 'Alice', 500),
+      new MockPlayer(1, 'Bob', 1000),
+      new MockPlayer(2, 'Charlie', 200),
+      new MockPlayer(3, 'Diana', 800),
+    ];
+  
+    const game = new Game(players, 100, 200);
+    (rankingHands as jest.Mock).mockImplementation((): PlayerRank[] => {
+      return [
+        {
+          players: [players[2]],
+          hand: { handValue: HandValue.HighCard, kickersRank: [12] },
+        },
+        {
+          players: [players[3]],
+          hand: { handValue: HandValue.HighCard, kickersRank: [11] },
+        },
+        {
+          players: [players[1]],
+          hand: { handValue: HandValue.HighCard, kickersRank: [10] },
+        },
+      ];
+    });
+
     // Add decisions to simulate an all-in scenario
 
     // --- Pre-Flop Betting Round ---
@@ -258,19 +229,19 @@ describe('Game class with all-in scenario', () => {
     // Action starts with Charlie
 
     // Pre-Flop actions
-    players[2].addDecision({ type: 'call', playerId: 3, playerName: 'Charlie' }); // all-in with 200
-    players[3].addDecision({ type: 'raise', playerId: 4, playerName: 'Diana', amount: 200 }); 
-    players[0].addDecision({ type: 'call', playerId: 1, playerName: 'Alice' });
-    players[1].addDecision({ type: 'call', playerId: 2, playerName: 'Bob' });
+    players[2].addDecision({ type: 'call', playerId: 2, playerName: 'Charlie' }); // all-in with 200
+    players[3].addDecision({ type: 'raise', playerId: 3, playerName: 'Diana', amount: 200 }); 
+    players[0].addDecision({ type: 'call', playerId: 0, playerName: 'Alice' });
+    players[1].addDecision({ type: 'call', playerId: 1, playerName: 'Bob' });
 
     // Since Charlie is all-in, he cannot act further
 
     // --- Flop Betting Round ---
     // Players: Alice, Bob, Diana
-    players[0].addDecision({ type: 'check', playerId: 1, playerName: 'Alice' });
-    players[1].addDecision({ type: 'bet', playerId: 2, playerName: 'Bob', amount: 500 }); // all-in
-    players[3].addDecision({ type: 'call', playerId: 4, playerName: 'Diana' }); // Diana calls all-in
-    players[0].addDecision({ type: 'fold', playerId: 1, playerName: 'Alice' });
+    players[0].addDecision({ type: 'check', playerId: 0, playerName: 'Alice' });
+    players[1].addDecision({ type: 'bet', playerId: 1, playerName: 'Bob', amount: 500 }); // all-in
+    players[3].addDecision({ type: 'call', playerId: 3, playerName: 'Diana' }); // Diana calls all-in
+    players[0].addDecision({ type: 'fold', playerId: 0, playerName: 'Alice' });
 
     // --- Turn and River Betting Rounds ---
     // No further actions as Bob is all-in
@@ -301,5 +272,54 @@ describe('Game class with all-in scenario', () => {
     expect(players[1].chips).toBe(200);
     expect(players[2].chips).toBe(800);
     expect(players[3].chips).toBe(1400);
+  });
+
+  it.only('should handle all-in in head-up situations correctly', async () => {
+
+    const players = [
+      new MockPlayer(0, 'Marvin', 1000),
+      new MockPlayer(1, 'Joce', 1000),
+      new MockPlayer(2, 'Dimitri', 1000),
+      new MockPlayer(3, 'Thomas', 1000),
+    ];
+    const game = new Game(players, 5, 10);
+
+    (rankingHands as jest.Mock).mockImplementation((): PlayerRank[] => {
+      return [
+        {
+          players: [players[0]],
+          hand: { handValue: HandValue.TwoPair, kickersRank: [11, 6, 10] },
+        },
+        {
+          players: [players[3]],
+          hand: { handValue: HandValue.TwoPair, kickersRank: [6, 2, 10] },
+        },
+      ];
+    });
+
+    // --- Pre-Flop Betting Round ---
+    players[2].addDecision({ type: 'call', playerId: 2, playerName: 'Dimitri' });
+    players[3].addDecision({ type: 'raise', playerId: 3, playerName: 'Thomas', amount: 30 }); 
+    players[0].addDecision({ type: 'raise', playerId: 0, playerName: 'Marvin', amount: 90 });
+    players[1].addDecision({ type: 'fold', playerId: 1, playerName: 'Joce' });
+    players[2].addDecision({ type: 'fold', playerId: 2, playerName: 'Dimitri' });
+    players[3].addDecision({ type: 'call', playerId: 3, playerName: 'Thomas' }); 
+    
+    
+    // --- Flop Betting Round ---\
+    players[0].addDecision({ type: 'allIn', playerId: 0, playerName: 'Marvin' });
+    players[3].addDecision({ type: 'allIn', playerId: 3, playerName: 'Thomas' }); 
+
+    await game.playRound();
+
+    // Verify that total chips remain constant
+    const totalChips = players.reduce((sum, player) => sum + player.chips, 0);
+    expect(totalChips).toBe(4000); // Initial total chips
+
+    // Check the final chip counts for each player
+    expect(players[0].chips).toBe(2020);
+    expect(players[1].chips).toBe(990);
+    expect(players[2].chips).toBe(990);
+    expect(players[3].chips).toBe(0);
   });
 });

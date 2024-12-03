@@ -155,10 +155,11 @@ export class Game {
                 const possibleActions = this.getPossibleActions(currentPlayer);
                 const action = await currentPlayer.makeDecision(this.gameState, possibleActions);
 
+                const previousBet = this.gameState.currentBet;
                 this.processAction(currentPlayer, action);
 
-                // If a raise or bet occurred, reset hasActed for other players
-                if (action.type === 'raise' || action.type === 'bet') {
+                // If a bet, a raise or an all-in above current highest bet occurred, reset hasActed for other players
+                if (action.type === 'bet' || action.type === 'raise' || (action.type === "allIn" && this.gameState.currentBet > previousBet)) {
                     this.players.forEach((player, index) => {
                         if (index !== currentPlayerIndex && player.isActive && !player.isAllIn) {
                             player.hasActed = false;
@@ -228,7 +229,7 @@ export class Game {
         const isValid = this.validateAction(player, action);
         if (!isValid) {
             // If action is invalid, force a fold
-            (action as any) = { type: 'fold' };
+            (action as any).type = 'fold';
             this.gameState.addLog(describePlayerAction(action));
             this.gameState.actions.push(action);
             return;
@@ -240,10 +241,17 @@ export class Game {
                 break;
             case 'allIn':
                 const allInAmount = player.chips;
+                const raiseBy = this.gameState.currentBet + allInAmount - player.currentBet;
                 player.chips -= allInAmount;
                 player.currentBet += allInAmount;
                 player.totalHandRoundBet += allInAmount;
                 this.gameState.pot += allInAmount;
+                if (raiseBy > this.gameState.lastRaiseBy) {
+                    this.gameState.lastRaiseBy = raiseBy;
+                }
+                if (player.currentBet > this.gameState.currentBet) {
+                    this.gameState.currentBet = player.currentBet;
+                }
                 player.isAllIn = true;
                 break;
             case 'call':
@@ -280,7 +288,7 @@ export class Game {
                 break;
         }
         if (player.chips === 0) {
-            (action as any) = { type: 'allIn' };
+            (action as any).type = 'allIn';
             player.isAllIn = true;
         }
         this.gameState.addLog(describePlayerAction(action));
@@ -292,10 +300,7 @@ export class Game {
         // Betting round ends if:
         // - All active players have acted
         // - All bets are equal
-        // - Only one player is active and not allin
-        if (activePlayers.length === 1) {
-            return false;
-        }
+
         const allPlayersHaveActed = activePlayers.every(p => p.hasActed);
         const betsAreEqual = activePlayers.every(p => p.currentBet === this.gameState.currentBet);
 

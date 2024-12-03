@@ -55,7 +55,7 @@ export function describePossibleAction(possibleAction: PossibleAction) {
         case 'call':
             return `call`;
         case 'raise':
-            return `raise ${possibleAction.minimalAmount} or more`;
+            return `raise by ${possibleAction.minimalAmount} or more`;
         case 'check':
             return `check`;
         case 'bet':

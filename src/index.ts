@@ -63,6 +63,8 @@ async function main() {
     new AzureOpenAIPlayer(1, "Joce", 1000, api, apiKey),
     new AzureOpenAIPlayer(2, "Dimitri", 1000, api, apiKey),
     new AzureOpenAIPlayer(3, "Thomas", 1000, api, apiKey),
+    new AzureOpenAIPlayer(4, "Belle", 1000, api, apiKey),
+    new AzureOpenAIPlayer(5, "Roxane", 1000, api, apiKey),
   ]
   
   let continueGame: number = 0;
