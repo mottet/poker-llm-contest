@@ -51,14 +51,14 @@ export class Game {
         if (this.players.filter(p => p.isActive).length < 2) {
             return;
         }
-    
+
         // Turn
         this.dealCommunityCards(1);
         await this.bettingRound();
         if (this.players.filter(p => p.isActive).length < 2) {
             return;
         }
-    
+
         // River
         this.dealCommunityCards(1);
         await this.bettingRound();
@@ -131,14 +131,17 @@ export class Game {
         for (let i = 0; i < count; i++) {
             this.gameState.communityCards.push(this.deck.deal());
         }
-        this.gameState.addLog(`\nCommunity card are now: ${ this.gameState.communityCards.join("|") }`);
+        this.gameState.addLog(`\nCommunity card are now: ${this.gameState.communityCards.join("|")}`);
     }
 
     private async bettingRound(isFirstRound: boolean = false) {
+        const playersToAct = this.players.filter(p => p.isActive && !p.isAllIn);
+        if (playersToAct.length === 0) {
+            return;
+        }
         // Determine the starting player
         let currentPlayerIndex = isFirstRound ? (2 % this.players.length) : 0;
 
-        
         // Reset players' hasActed status
         this.players.forEach(player => {
             if (player.isActive && !player.isAllIn) {
@@ -230,6 +233,7 @@ export class Game {
         if (!isValid) {
             // If action is invalid, force a fold
             (action as any).type = 'fold';
+            player.isActive = false;
             this.gameState.addLog(describePlayerAction(action));
             this.gameState.actions.push(action);
             return;
@@ -296,11 +300,12 @@ export class Game {
     }
 
     private shouldContinueBettingRound(): boolean {
-        const activePlayers = this.players.filter(p => p.isActive && !p.isAllIn);
-        // Betting round ends if:
-        // - All active players have acted
-        // - All bets are equal
 
+        if (this.players.filter(p => p.isActive).length === 1) {
+            return false;
+        }
+
+        const activePlayers = this.players.filter(p => p.isActive && !p.isAllIn);
         const allPlayersHaveActed = activePlayers.every(p => p.hasActed);
         const betsAreEqual = activePlayers.every(p => p.currentBet === this.gameState.currentBet);
 
@@ -325,7 +330,7 @@ export class Game {
         // Log the best hands of all active players
         bestHandRank.forEach(rank => {
             const playerNames = rank.players.map(p => p.name).join(", ");
-            const kicker = rank.hand.kickersRank.length > 0 ? ` with kickers: ${rank.hand.kickersRank.map(k => Object.values(Rank)[k]).join(", ")}`: null;
+            const kicker = rank.hand.kickersRank.length > 0 ? ` with kickers: ${rank.hand.kickersRank.map(k => Object.values(Rank)[k]).join(", ")}` : null;
             console.log(`Players ${playerNames} have a hand value of ${HandValue[rank.hand.handValue]}${kicker}`);
         });
 
@@ -366,7 +371,7 @@ export class Game {
                 amount: potAmount,
                 players: [...sortedPlayers],
             });
-            
+
             // Subtract the smallest bet from each player's totalRoundBet
             // and remove player if totalRoundBet is now zero
             sortedPlayers = sortedPlayers.filter(p => {
