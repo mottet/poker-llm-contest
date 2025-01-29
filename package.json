@@ -21,8 +21,9 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
     "dotenv": "^16.4.5",
-    "openai": "^4.72.0",
+    "openai": "^4.81.0",
     "ws": "^8.18.0"
   }
 }

@@ -4,6 +4,8 @@ import * as readline from 'readline';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 import { AzureOpenAIPlayer } from './models/AzureOpenAIPlayer';
+import { AnthropicClientPlayer } from './models/AnthropicClientPlayer';
+import { DeepSeekClientPlayer } from './models/DeepSeekClientPlayer';
 import { Player } from './models/Player';
 
 dotenv.config();
@@ -118,13 +120,13 @@ async function main() {
 
   const players: Player[] = [
     new AzureOpenAIPlayer(0, "Marvin", 1000, "gpt-4o"),
-    new AzureOpenAIPlayer(1, "Joce", 1000, "AI21-Jamba-1.5-Large"),
-    new AzureOpenAIPlayer(2, "Dimitri", 1000, "Mistral-Large-2411"),
-    new AzureOpenAIPlayer(3, "Thomas", 1000, "Llama-3.3-70B-Instruct"),
-    new AzureOpenAIPlayer(4, "Belle", 1000, "gpt-4o"),
-    new AzureOpenAIPlayer(5, "Roxane", 1000, "Mistral-Large-2411"),
-    new AzureOpenAIPlayer(6, "Alice", 1000, "Llama-3.3-70B-Instruct"),
-    new AzureOpenAIPlayer(7, "Nicolas", 1000, "AI21-Jamba-1.5-Large"),
+    new AnthropicClientPlayer(1, "Joce", 1000, "claude-3-5-sonnet-20241022"),
+    new AzureOpenAIPlayer(2, "Dimitri", 1000, "gpt-4o"),
+    new AzureOpenAIPlayer(3, "Thomas", 1000, "gpt-4o"),
+    new DeepSeekClientPlayer(4, "Belle", 1000, "deepseek-chat"),
+    new AnthropicClientPlayer(5, "Roxane", 1000, "claude-3-5-sonnet-20241022"),
+    new AzureOpenAIPlayer(6, "Alice", 1000, "gpt-4o"),
+    new AnthropicClientPlayer(7, "Nicolas", 1000, "claude-3-5-sonnet-20241022"),
   ]
 
   // Uncomment one of these lines to choose the mode:
