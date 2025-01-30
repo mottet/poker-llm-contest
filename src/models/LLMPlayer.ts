@@ -38,7 +38,7 @@ export abstract class LLMPlayer extends Player {
       gameState.pot
     } chips. It's your turn. Do you ${possibleActions
       .map(describePossibleAction)
-      .join(", ")}? Reply exactly your action, no more.`;
+      .join(", ")}? Reply exactly your action, no more, do not explain yourself.`;
   }
 
   abstract queryLLM(prompt: string): Promise<string>;
