@@ -6,6 +6,7 @@ import * as dotenv from 'dotenv';
 import { AzureOpenAIPlayer } from './models/AzureOpenAIPlayer';
 import { AnthropicClientPlayer } from './models/AnthropicClientPlayer';
 import { DeepSeekClientPlayer } from './models/DeepSeekClientPlayer';
+import { McpPlayer } from './models/McpPlayer';
 import { Player } from './models/Player';
 
 dotenv.config();
@@ -127,6 +128,9 @@ async function main() {
     new AnthropicClientPlayer(5, "Roxane", 1000, "claude-3-5-sonnet-20241022"),
     new AzureOpenAIPlayer(6, "Alice", 1000, "gpt-4o"),
     new AnthropicClientPlayer(7, "Nicolas", 1000, "claude-3-5-sonnet-20241022"),
+    // Add MCP players - these use Model Context Protocol for game interaction
+    new McpPlayer(8, "McpBot1", 1000, true, 2000), // 2 second timeout for real games
+    new McpPlayer(9, "McpBot2", 1000, true, 2000), // 2 second timeout for real games
   ]
 
   // Uncomment one of these lines to choose the mode:
