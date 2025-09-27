@@ -5,7 +5,9 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "build": "tsc",
-    "test": "jest"
+    "test": "jest",
+    "mcp-server": "node dist/mcp-server.js",
+    "mcp-demo": "ts-node src/mcp-demo.ts"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +24,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.3",
+    "@modelcontextprotocol/sdk": "^1.18.2",
     "dotenv": "^16.4.5",
     "openai": "^4.81.0",
     "ws": "^8.18.0"
